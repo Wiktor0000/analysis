@@ -3,6 +3,8 @@ from typing import Any
 import pandas as pd
 import numpy as np
 from pandas import DataFrame, Series
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
 
 #Wczytywanie danych
 df: DataFrame = pd.read_csv(r"C:\Users\wmusi\OneDrive\Pulpit\data\all_data_apartments.csv")
@@ -46,6 +48,14 @@ data_type_mapping = {
 for col, dtype in data_type_mapping.items():
     df[col] = df[col].astype(dtype, errors = "ignore")
 
+#Regresja liniowa
+x = df["square_meters"].values
+y = df["price"].values
+x_mean = np.mean(x)
+y_mean = np.mean(y)
 
-pd.set_option("display.max_columns", None)
-print(df.head(30))
+beta_1 = np.sum((x - x_mean) * (y - y_mean)) / np.sum((x - x_mean) ** 2)
+beta_0 = y_mean - (beta_1 * x_mean)
+
+#Wyznaczanie prostej regresji - metoda najmniejszych kwadratów (MNK)
+prosta = (beta_1 * x) + beta_0
