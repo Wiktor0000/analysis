@@ -6,11 +6,16 @@ from pandas import DataFrame, Series
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 import seaborn as sns
+import scipy.stats as stats
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
-#Wczytywanie danych
+# Wczytywanie danych
 df: DataFrame = pd.read_csv(r"C:\Users\wmusi\OneDrive\Pulpit\data\all_data_apartments.csv")
 
-#Zmiana nazw kolumn
+# Zmiana nazw kolumn
 df.columns = ["id", "city", "type", "square_meters", "rooms", "floor", "floor_count",
 "build_year", "latitude", "longitude", "centre_distance", "poi_count", "school_distance",
 "clinic_distance", "post_office_distance", "kinder_garten_distance", "restaurant_distance",
@@ -18,11 +23,10 @@ df.columns = ["id", "city", "type", "square_meters", "rooms", "floor", "floor_co
 "has_parking_space", "has_balcony", "has_elevator", "has_security", "has_storage_room",
 "price", "date", "year", "month"]
 
-#Usunięcie niepotrzebnych kolumn
+# Usunięcie niepotrzebnych kolumn
 df = df.drop(columns = ["date", "year", "month", "latitude", "longitude"])
 
-
-#Uzupełnienie brakujących wartości, najczęściej występującą wartością.
+# Uzupełnienie brakujących wartości, najczęściej występującą wartością
 mode_value = df["type"].mode()[0]
 df["type"] = df["type"].fillna(mode_value)
 
@@ -38,7 +42,7 @@ lack_value = ["building_material", "condition", "has_elevator"]
 for lack in lack_value:
     df[lack] = df[lack].fillna("Brak danych")
 
-#Zmiana danych ze zmiennoprzecinkowych, na całkowite
+# Zmiana danych ze zmiennoprzecinkowych, na całkowite
 data_type_mapping = {
     "rooms": int,
     "floor": int,
@@ -49,35 +53,97 @@ data_type_mapping = {
 for col, dtype in data_type_mapping.items():
     df[col] = df[col].astype(dtype, errors = "ignore")
 
-#Regresja liniowa
-x = df["square_meters"].values
-y = df["price"].values
-x_mean = np.mean(x)
-y_mean = np.mean(y)
+average_price = df["price"].mean()
+print(average_price)
 
-beta_1 = np.sum((x - x_mean) * (y - y_mean)) / np.sum((x - x_mean) ** 2)
-beta_0 = y_mean - (beta_1 * x_mean)
+# Współczynnik korelacji Pearsona
+correlation_data = df[["price", "square_meters", "rooms"]]
+correlation_matrix = correlation_data.corr()
 
-#Wyznaczanie prostej regresji - metoda najmniejszych kwadratów (MNK)
-prosta = (beta_1 * x) + beta_0
+print("Macierz korelacji: ")
+print(correlation_matrix)
 
-#Wykres danych i dopasowanej linii regresji.
-plt.figure(figsize=(10, 6))
-plt.scatter(x, y, color='blue', label='Dane rzeczywiste')
-plt.plot(x, prosta, color='red', label='Prosta regresji')
-plt.xlabel('Powierzchnia (metry kwadratowe)')
-plt.ylabel('Cena')
-plt.title('Regresja liniowa - Metoda najmniejszych kwadratów')
-plt.legend()
+# Wykres macierzy
+plt.figure(figsize = (10, 6))
+sns.heatmap(correlation_matrix, annot = True, cmap = "coolwarm", center = 0)
+plt.title("Macierz korelacji")
 plt.show()
 
-#Badanie dokładności.
-SSm = np.sum((prosta - y_mean) ** 2)
-SSt = np.sum((y - y_mean) ** 2)
-r2 = SSm / SSt
-print(f"{r2:.2f}")
+# Regresja liniowa - cena vs powierzchnia
+def price_and_square_meters(df):
+    X = df[["square_meters"]].values
+    y = df["price"].values
+    X_train, X_test, y_train, y_test = (train_test_split
+        (X, y, test_size = 0.2, random_state = 42))
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
 
-#Rozkład zmiennych.
+    # Wykres danych
+    plt.figure(figsize = (10, 6))
+    plt.scatter(X_test, y_test, color = "blue", label = "Dane rzeczywiste", s = 5)
+    plt.plot(X_test, y_pred, color = "red", linewidth = 2, label = "Prosta regresji")
+    plt.xlabel("Powierzchnia")
+    plt.ylabel("Cena")
+    plt.title("Regresja liniowa - cena vs powierzchnia")
+    plt.legend()
+    (plt.gca().get_yaxis().set_major_formatter
+        (plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x)))))
+    plt.show()
+
+    return model, X_test, y_test, y_pred, mse, r2
+
+model, X_test, y_test, y_pred, mse, r2 = price_and_square_meters(df)
+print(f"Błąd średniokwadratowy (MSE): {mse}")
+print(f"Współczynnik determinacji (R^2): {r2}")
+
+# Regresja liniowa - cena vs liczba pokoi
+def price_and_rooms(df):
+    X = df[["rooms"]].values
+    y = df["price"].values
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2)
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+
+    # Wykres danych
+    plt.figure(figsize=(10, 6))
+    plt.scatter(X_test, y_test, color='blue', label='Dane rzeczywiste', s=10)
+    plt.plot(X_test, y_pred, color='red', linewidth=2, label='Prosta regresji')
+    plt.xlabel('Liczba pokoi')
+    plt.ylabel('Cena')
+    plt.title('Regresja liniowa - Metoda najmniejszych kwadratów')
+    plt.legend()
+    (plt.gca().get_yaxis().set_major_formatter
+        (plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x)))))
+    plt.show()
+
+    return model, X_test, y_test, y_pred, mse, r2
+model, X_test, y_test, y_pred, mse, r2 = price_and_rooms(df)
+print(f"Błąd średniokwadratowy (MSE): {mse}")
+print(f"Współczynnik determinacji (R^2): {r2}")
+
+
+# Regresja liniowa - cena vs odległość od centrum
+def price_and_multi(df):
+    X = df[["square_meters", "rooms", "floor",
+            "centre_distance"]].values
+    y = df["price"].values
+    X_train, X_test, y_train, y_test = (train_test_split
+                (X, y, test_size = 0.2, random_State = 42 ))
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+
+
+# Rozkład zmiennych.
 # Wykres rozkładu powierzchni (metry kwadratowe)
 plt.figure(figsize=(10, 6))
 sns.histplot(df['square_meters'], kde=True, bins=30)
