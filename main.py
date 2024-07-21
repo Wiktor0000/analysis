@@ -11,6 +11,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from statsmodels.formula.api import ols
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
 # Wczytywanie danych
 df: DataFrame = pd.read_csv(r"C:\Users\wmusi\OneDrive\Pulpit\data\all_data_apartments.csv")
@@ -83,7 +85,7 @@ def price_and_square_meters(df):
 
     # Wykres danych
     plt.figure(figsize = (10, 6))
-    plt.scatter(X_test, y_test, color = "blue", label = "Dane rzeczywiste", s = 5)
+    plt.scatter(X_test, y_test, color = "blue", label = "Dane rzeczywiste", s = 10)
     plt.plot(X_test, y_pred, color = "red", linewidth = 2, label = "Prosta regresji")
     plt.xlabel("Powierzchnia")
     plt.ylabel("Cena")
@@ -103,7 +105,8 @@ print(f"Współczynnik determinacji (R^2): {r2}")
 def price_and_rooms(df):
     X = df[["rooms"]].values
     y = df["price"].values
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2)
+    X_train, X_test, y_train, y_test = (train_test_split
+        (X, y, test_size = 0.2, random_state = 42))
     model = LinearRegression()
     model.fit(X_train, y_train)
 
@@ -113,11 +116,11 @@ def price_and_rooms(df):
 
     # Wykres danych
     plt.figure(figsize=(10, 6))
-    plt.scatter(X_test, y_test, color='blue', label='Dane rzeczywiste', s=10)
-    plt.plot(X_test, y_pred, color='red', linewidth=2, label='Prosta regresji')
-    plt.xlabel('Liczba pokoi')
-    plt.ylabel('Cena')
-    plt.title('Regresja liniowa - Metoda najmniejszych kwadratów')
+    plt.scatter(X_test, y_test, color = "blue", label = "Dane rzeczywiste", s = 10)
+    plt.plot(X_test, y_pred, color = "red", linewidth = 2, label = "Prosta regresji")
+    plt.xlabel("Liczba pokoi")
+    plt.ylabel("Cena")
+    plt.title("Regresja liniowa - Metoda najmniejszych kwadratów")
     plt.legend()
     (plt.gca().get_yaxis().set_major_formatter
         (plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x)))))
@@ -132,16 +135,32 @@ print(f"Współczynnik determinacji (R^2): {r2}")
 # Regresja liniowa - cena vs odległość od centrum
 def price_and_multi(df):
     X = df[["square_meters", "rooms", "floor",
-            "centre_distance"]].values
-    y = df["price"].values
+            "centre_distance"]]
+    y = df["price"]
     X_train, X_test, y_train, y_test = (train_test_split
-                (X, y, test_size = 0.2, random_State = 42 ))
+                (X, y, test_size = 0.2, random_state = 42))
     model = LinearRegression()
     model.fit(X_train, y_train)
+
     y_pred = model.predict(X_test)
     mse = mean_squared_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
 
+    #Wykres rzeczywiste wartości vs przewidywane wartości
+    plt.figure(figsize=(10, 6))
+    plt.scatter(y_test, y_pred, color = "blue", label = "Predykcje", s = 10)
+    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw = 2, label = "Idealna linia")
+    plt.xlabel("Rzeczywiste ceny")
+    plt.ylabel("Przewidywane ceny")
+    plt.legend()
+    plt.title("Wykres rzeczywiste wartości vs. przewidywane wartości")
+    plt.show()
+
+    return model, X_test, y_test, y_pred, mse, r2
+model, X_test, y_test, y_pred, mse, r2 = price_and_multi(df)
+print(f"Błąd średniokwadratowy (MSE-price_and_multi): {mse}")
+print(f"Współczynnik determinacji (R^2-price_and_multi): {r2}")
+print()
 
 # Rozkład zmiennych.
 # Wykres rozkładu powierzchni (metry kwadratowe)
@@ -186,3 +205,42 @@ print(f"Mieszkania, które posiadają windę: {count_elevator}")
 print(f"Mieszkania, które posiadają miejsce parkingowe: {count_parking_space}")
 print(f"Mieszkania, które posiadają ochronę: {count_security}")
 print(f"Mieszkania, które posiadają komórkę lokatorską: {count_storage_room}")
+
+unique_cities = df["city"].unique()
+print(unique_cities)
+
+anova_result = stats.f_oneway(
+    df[df["city"] == "szczecin"]["price"],
+    df[df["city"] == "gdynia"]["price"],
+    df[df["city"] == "krakow"]["price"],
+    df[df["city"] == "poznan"]["price"],
+    df[df["city"] == "bialystok"]["price"],
+    df[df["city"] == "gdansk"]["price"],
+    df[df["city"] == "wroclaw"]["price"],
+    df[df["city"] == "radom"]["price"],
+    df[df["city"] == "rzeszow"]["price"],
+    df[df["city"] == "lodz"]["price"],
+    df[df["city"] == "katowice"]["price"],
+    df[df["city"] == "lublin"]["price"],
+    df[df["city"] == "czestochowa"]["price"],
+    df[df["city"] == "warszawa"]["price"],
+    df[df["city"] == "bydgoszcz"]["price"])
+
+print('Statystyka F:', anova_result.statistic)
+print('P-wartość:', anova_result.pvalue)
+print()
+print()
+model = ols("price ~ C(city)", data=df).fit()
+anova_table = sm.stats.anova_lm(model, typ = 2)
+print(anova_table)
+
+tukey = pairwise_tukeyhsd(endog = df["price"], groups = df["city"], alpha = 0.05)
+print(tukey)
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x = "city", y = "price", data = df)
+plt.xticks(rotation = 90)
+plt.title("Rozkład cen nieruchomości w różnych miastach")
+plt.xlabel("Miasto")
+plt.ylabel("Cena nieruchomości")
+plt.show()
